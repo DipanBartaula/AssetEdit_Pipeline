@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+outputs/
+assets/
+logs/
+*.log
+pipeline.log
+.env
+.env.local
+.env.*.local
+
+# Test/Temp files
+test_image.jpg
+test_output.png
+*.tmp
+temp/
+tmp/
+
+# Docker
+.dockerignore
+Dockerfile.dev
+
+# Cache
+.cache/
+*.cache
+.pytest_cache/
+.hypothesis/
+
+# Models (large files)
+models/checkpoints/
+*.pt
+*.pth
+*.safetensors
+
+# HuggingFace cache
+.huggingface/
+.cache/huggingface/
+
+# OS
+.DS_Store
+Thumbs.db
+.directory
+
+# Git
+.git/
+.gitmodules
+
+# Editor backup files
+*.bak
+*.swp
+*.swo
+*~
+.#*
