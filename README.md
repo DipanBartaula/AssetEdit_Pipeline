@@ -72,14 +72,14 @@ The entire workflow is orchestrated through a user-friendly Gradio interface and
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Gradio Web Interface                        │
-│                         (app.py)                                 │
+│                      Gradio Web Interface                       │
+│                         (app.py)                                │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Pipeline Orchestrator                         │
-│                      (pipeline.py)                               │
+│                    Pipeline Orchestrator                        │
+│                      (pipeline.py)                              │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
             ┌───────────────┴───────────────┐
@@ -248,6 +248,46 @@ python qwen_app.py
 
 This launches a dedicated Qwen Image Edit Plus interface.
 
+### Integrated Pipeline (Recommended)
+
+The integrated pipeline provides a unified interface for both image editing and 3D generation:
+
+```bash
+# Launch the integrated web app
+python integrated_app.py
+```
+
+Access at: **http://localhost:7860**
+
+#### Command Line Usage
+
+```bash
+# Full pipeline: Edit + 3D generation
+python integrated_pipeline.py -i input.jpg -e "Add sunglasses" -g "high quality model"
+
+# Edit only
+python integrated_pipeline.py -i input.jpg -e "Transform to fantasy style" --edit-only
+
+# Generate 3D only
+python integrated_pipeline.py -i input.jpg -g "detailed mesh" --generate-only
+```
+
+#### Python API Usage
+
+```python
+from integrated_pipeline import IntegratedPipeline, quick_edit_image, run_pipeline
+
+# Quick edit an image
+edited = quick_edit_image("input.jpg", "Add magical effects")
+
+# Run full pipeline
+result = run_pipeline(
+    "input.jpg",
+    edit_prompt="Make it a cyberpunk character",
+    generation_prompt="detailed 3D model"
+)
+```
+
 ---
 
 ## Project Structure
@@ -258,7 +298,9 @@ AssetEdit_Pipeline/
 ├── 📜 Core Application
 │   ├── app.py                 # Main Gradio web interface
 │   ├── pipeline.py            # Pipeline orchestration logic
-│   └── qwen_app.py            # Standalone Qwen image editor
+│   ├── qwen_app.py            # Standalone Qwen image editor
+│   ├── integrated_pipeline.py # ⭐ Unified pipeline (Qwen + Hunyuan 3D)
+│   └── integrated_app.py      # ⭐ Unified Gradio web interface
 │
 ├── 🤖 Models
 │   ├── models/
@@ -356,6 +398,61 @@ result = generator.generate_3d_asset(
     output_name="my_asset"
 )
 # result["model_path"] contains the .glb file path
+```
+
+### IntegratedPipeline (Recommended)
+
+Unified pipeline combining Qwen Image Edit Plus and Hunyuan 3D.
+
+```python
+from integrated_pipeline import IntegratedPipeline
+
+# Initialize pipeline
+pipeline = IntegratedPipeline(
+    output_dir="./outputs",
+    auto_load_models=False  # Lazy load to save memory
+)
+
+# Edit image only
+edited_image, saved_path = pipeline.edit_image(
+    image="input.png",
+    prompt="Add sunglasses and a hat",
+    true_cfg_scale=4.0,
+    num_inference_steps=40
+)
+
+# Generate 3D only
+result = pipeline.generate_3d(
+    image="input.png",
+    prompt="detailed 3D character model"
+)
+
+# Run full pipeline (Edit → 3D)
+result = pipeline.run_full_pipeline(
+    input_image="input.png",
+    edit_prompt="Transform into a fantasy warrior",
+    generation_prompt="high quality 3D game asset"
+)
+
+print(result["steps"]["image_editing"]["edited_image_path"])
+print(result["steps"]["3d_generation"]["model_path"])
+```
+
+### Convenience Functions
+
+Quick one-liner functions for common tasks:
+
+```python
+from integrated_pipeline import quick_edit_image, quick_generate_3d, run_pipeline
+
+# Quick edit
+edited = quick_edit_image("input.jpg", "Add wings", output_path="edited.png")
+
+# Quick 3D generation
+result = quick_generate_3d("input.jpg", prompt="clean mesh")
+
+# Full pipeline in one line
+result = run_pipeline("input.jpg", "Make it magical", "detailed model")
 ```
 
 ---
