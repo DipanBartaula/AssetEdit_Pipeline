@@ -38,6 +38,12 @@ This pipeline enables users to:
 
 The entire workflow is orchestrated through a user-friendly Gradio interface and can be deployed using Docker for production environments.
 
+**Demo UI**
+
+Below is a screenshot of the Gradio UI demo included in this repository (see `images/ui_demo.png`).
+
+![UI Demo](images/ui_demo.png)
+
 ---
 
 ## Features
