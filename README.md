@@ -248,6 +248,44 @@ python qwen_app.py
 
 This launches a dedicated Qwen Image Edit Plus interface.
 
+### Hunyuan 3D Runner (Direct 3D Generation)
+
+Generate 3D assets directly from images using the `hunyuan3d_runner.py` script. This is useful for batch processing or direct command-line usage.
+
+#### Basic Usage
+
+```bash
+# Test the setup first
+python hunyuan3d_runner.py ~/Pictures/my_image.png -d feynmann_custom:v1 --test
+
+# Run the 3D generation
+python hunyuan3d_runner.py ~/Pictures/my_image.png -d feynmann_custom:v1 
+```
+
+#### Command-Line Options
+
+- `image_path`: Path to input image (PNG, JPG, JPEG)
+- `-d, --docker-image`: Docker image name (optional, defaults to Lightning AI API)
+- `--test`: Run in test mode before full processing
+- Other available flags: See `python hunyuan3d_runner.py --help`
+
+#### Output
+
+The generated 3D model will be saved at: `~/hunyuan_data/output_shape.glb`
+
+#### Example Workflow
+
+```bash
+# Step 1: Test the installation
+python hunyuan3d_runner.py ~/Pictures/my_image.png -d john_doe/hunyuan3d:latest --test
+
+# Step 2: If test passes, run the full generation
+python hunyuan3d_runner.py ~/Pictures/my_image.png -d john_doe/hunyuan3d:latest
+
+# Step 3: Check the output
+ls ~/hunyuan_data/output_shape.glb
+```
+
 ### Integrated Pipeline (Recommended)
 
 The integrated pipeline provides a unified interface for both image editing and 3D generation:
