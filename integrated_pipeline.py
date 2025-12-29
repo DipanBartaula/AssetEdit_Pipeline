@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, List, Tuple, Union
 from PIL import Image
 import numpy as np
+from hunyuan3d_runner import Hunyuan3DRunner
 
 # Setup logging
 logging.basicConfig(
@@ -212,28 +213,46 @@ class QwenImageEditor:
 
 class Hunyuan3DGenerator:
     """
-    3D asset generation using Hunyuan 3D 2.1 model via Lightning AI
+    3D asset generation using Hunyuan 3D 2.1 model via Docker-based Hunyuan3DRunner
     Outputs 3D models in .glb format for web rendering
     """
     
     def __init__(
         self,
-        lightning_api_key: str = None,
-        output_dir: str = "./outputs"
+        output_dir: str = "./outputs",
+        docker_image: Optional[str] = None,
     ):
         """
         Initialize Hunyuan 3D Generator
         
         Args:
-            lightning_api_key: Lightning AI API key (from env if not provided)
             output_dir: Directory for output 3D assets
+            docker_image: Docker image name for Hunyuan3D-2.1
         """
-        self.api_key = lightning_api_key or os.environ.get("LIGHTNING_API_KEY", "")
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.lightning_api_url = "https://api.lightning.ai/v1/hunyuan3d"
+        self.docker_image = docker_image or os.environ.get(
+            "HUNYUAN3D_DOCKER_IMAGE",
+            "your_username/hunyuan3d:latest",
+        )
+        logger.info(f"Hunyuan3DGenerator initialized (output: {self.output_dir}, docker_image: {self.docker_image})")
+    
+    def _save_input_image(self, image: Union[str, Image.Image, np.ndarray]) -> str:
+        """Ensure the input is saved as a PNG file and return its path"""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        input_path = self.output_dir / "hunyuan_input.png"
         
-        logger.info(f"Hunyuan3DGenerator initialized (output: {self.output_dir})")
+        if isinstance(image, str):
+            return image
+        elif isinstance(image, np.ndarray):
+            img = Image.fromarray(image).convert("RGB")
+        elif isinstance(image, Image.Image):
+            img = image.convert("RGB")
+        else:
+            raise ValueError("Unsupported image type for Hunyuan3DGenerator")
+        
+        img.save(input_path)
+        return str(input_path)
     
     def generate_3d_asset(
         self,
@@ -243,89 +262,66 @@ class Hunyuan3DGenerator:
         output_format: str = "glb"
     ) -> Optional[Dict]:
         """
-        Generate 3D asset from image via Lightning AI
+        Generate 3D asset from image using the Docker-based Hunyuan3DRunner
         
         Args:
             image: Input image (path, PIL Image, or numpy array)
-            prompt: Additional text prompt for generation
+            prompt: Additional text prompt for generation (unused, kept for API compatibility)
             output_name: Name for output files
-            output_format: Output format (default: glb)
+            output_format: Output format (only 'glb' is currently supported)
             
         Returns:
             Dictionary with generated asset info or None on failure
         """
-        if not self.api_key:
-            logger.error("Lightning API key not configured")
-            raise RuntimeError(
-                "LIGHTNING_API_KEY environment variable required. "
-                "Set it via: export LIGHTNING_API_KEY=your_key"
-            )
-        
-        # Convert image to bytes
-        if isinstance(image, str):
-            with open(image, 'rb') as f:
-                image_data = f.read()
-            source_image = image
-        else:
-            import io
-            if isinstance(image, np.ndarray):
-                image = Image.fromarray(image)
-            buffer = io.BytesIO()
-            image.save(buffer, format='PNG')
-            image_data = buffer.getvalue()
-            source_image = "in-memory"
+        if output_format != "glb":
+            logger.warning("Hunyuan3DRunner currently only outputs GLB. Forcing output_format='glb'.")
+            output_format = "glb"
         
         if output_name is None:
             output_name = f"asset_{int(time.time())}"
         
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/octet-stream"
-            }
-            
-            params = {
-                "prompt": prompt,
-                "output_format": output_format
-            }
-            
-            logger.info(f"Sending request to Lightning AI for 3D generation...")
-            logger.info(f"Prompt: {prompt if prompt else 'None'}")
-            
-            response = requests.post(
-                f"{self.lightning_api_url}/generate",
-                headers=headers,
-                params=params,
-                data=image_data,
-                timeout=600  # 10 minutes timeout
+            input_image_path = self._save_input_image(image)
+            runner = Hunyuan3DRunner(
+                docker_image=self.docker_image,
+                data_dir=str(self.output_dir),
             )
-            response.raise_for_status()
+            logger.info(f"Starting Docker-based Hunyuan3D generation using image: {input_image_path}")
+            output_file = runner.run(input_image_path, verbose=True)
             
-            # Save output file
+            # The runner writes output_shape.glb into data_dir; rename to match output_name
             output_path = self.output_dir / f"{output_name}.{output_format}"
-            with open(output_path, 'wb') as f:
-                f.write(response.content)
+            try:
+                generated_path = self.output_dir / "output_shape.glb"
+                if generated_path.exists():
+                    generated_path.rename(output_path)
+                else:
+                    # Fallback to whatever path runner reported
+                    if output_file and Path(output_file).exists():
+                        Path(output_file).rename(output_path)
+            except Exception as e:
+                logger.warning(f"Could not rename generated GLB file: {e}")
+                output_path = Path(output_file) if output_file else None
             
-            logger.info(f"3D asset generated: {output_path}")
+            if not output_path or not Path(output_path).exists():
+                raise RuntimeError("Hunyuan3DRunner did not produce an output GLB file")
+            
+            file_size_mb = Path(output_path).stat().st_size / (1024 * 1024)
+            logger.info(f"3D asset generated via Docker: {output_path}")
             
             return {
                 "status": "success",
                 "asset_name": output_name,
                 "model_path": str(output_path),
                 "format": output_format,
-                "file_size_mb": len(response.content) / (1024 * 1024),
+                "file_size_mb": file_size_mb,
                 "metadata": {
                     "prompt": prompt,
-                    "source_image": source_image,
-                    "timestamp": datetime.now().isoformat()
-                }
+                    "timestamp": datetime.now().isoformat(),
+                },
             }
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
-            return None
         except Exception as e:
-            logger.error(f"Error generating 3D asset: {e}")
+            logger.error(f"Error generating 3D asset via Docker Hunyuan3DRunner: {e}")
             return None
     
     def get_asset_preview(self, asset_name: str) -> Optional[Dict]:
@@ -343,7 +339,7 @@ class Hunyuan3DGenerator:
         result = {
             "asset_name": asset_name,
             "model_exists": model_path.exists(),
-            "format": "glb"
+            "format": "glb",
         }
         
         if result["model_exists"]:
@@ -355,7 +351,7 @@ class Hunyuan3DGenerator:
     def list_assets(self) -> List[str]:
         """List all generated assets"""
         assets = set()
-        for ext in ['glb', 'ply', 'obj']:
+        for ext in ["glb", "ply", "obj"]:
             for file in self.output_dir.glob(f"*.{ext}"):
                 assets.add(file.stem)
         return sorted(list(assets))
