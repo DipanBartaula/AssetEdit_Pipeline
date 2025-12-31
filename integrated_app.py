@@ -27,9 +27,13 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = "./outputs"
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
+# Optional: configure Hunyuan3D Docker image via environment variable
+HUNYUAN_DOCKER_IMAGE = os.environ.get("HUNYUAN3D_DOCKER_IMAGE")
+
 pipeline = IntegratedPipeline(
     output_dir=OUTPUT_DIR,
-    auto_load_models=False  # Lazy load to save memory
+    auto_load_models=False,  # Lazy load to save memory
+    hunyuan_docker_image=HUNYUAN_DOCKER_IMAGE,
 )
 
 logger.info("Pipeline initialized")
@@ -106,7 +110,7 @@ def generate_3d_step(image, prompt: str):
         )
         
         if not result:
-            return None, "✗ 3D generation failed. Check your LIGHTNING_API_KEY."
+            return None, "✗ 3D generation failed. Ensure Docker is installed, GPU is available, and the Hunyuan3D Docker image is configured."
         
         model_path = result["model_path"]
         
@@ -216,7 +220,7 @@ def get_status():
 
 💡 Tips:
    • First edit may take time to load the model
-   • Set LIGHTNING_API_KEY for 3D generation
+   • Docker with GPU and the Hunyuan3D image are required for 3D generation
    • 3D models are saved in GLB format
 """
 

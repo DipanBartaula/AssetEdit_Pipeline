@@ -375,24 +375,32 @@ class IntegratedPipeline:
         self,
         output_dir: str = "./outputs",
         lightning_api_key: str = None,
-        auto_load_models: bool = False
+        auto_load_models: bool = False,
+        hunyuan_docker_image: Optional[str] = None,
     ):
         """
         Initialize the integrated pipeline
         
         Args:
             output_dir: Output directory for all results
-            lightning_api_key: Lightning AI API key for Hunyuan 3D
+            lightning_api_key: Unused (kept for backward compatibility)
             auto_load_models: Whether to load models on init
+            hunyuan_docker_image: Optional Docker image override for Hunyuan3D.
+                If not provided, falls back to HUNYUAN3D_DOCKER_IMAGE env var or
+                the default configured in Hunyuan3DGenerator.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize components
         self.image_editor = QwenImageEditor()
+
+        # Allow explicit override of the Hunyuan3D Docker image; otherwise rely
+        # on the generator's own default/env logic.
         self.generator_3d = Hunyuan3DGenerator(
             lightning_api_key=lightning_api_key,
-            output_dir=str(self.output_dir / "3d_assets")
+            output_dir=str(self.output_dir / "3d_assets"),
+            docker_image=hunyuan_docker_image,
         )
         
         # Execution history
