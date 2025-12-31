@@ -187,6 +187,14 @@ def test_imports():
         from pipeline import ImageTo3DPipeline
         logger.info("✓ ImageTo3DPipeline")
         
+        # Integrated pipeline (current implementation)
+        from integrated_pipeline import IntegratedPipeline
+        logger.info("✓ IntegratedPipeline")
+        
+        # Integrated Gradio app entry point
+        import integrated_app
+        logger.info("✓ integrated_app module")
+        
         from utils.config import Config
         logger.info("✓ Config")
         

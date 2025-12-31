@@ -33,8 +33,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY models/ ./models/
 COPY utils/ ./utils/
-COPY pipeline.py .
-COPY app.py .
+COPY integrated_pipeline.py .
+COPY integrated_app.py .
 
 # Create necessary directories
 RUN mkdir -p /outputs /assets /logs
@@ -46,5 +46,5 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import gradio; print('Gradio OK')" || exit 1
 
-# Run Gradio app
-CMD ["python", "app.py"]
+# Run integrated Gradio app
+CMD ["python", "integrated_app.py"]

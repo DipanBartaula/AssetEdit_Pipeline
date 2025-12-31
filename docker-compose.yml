@@ -21,4 +21,4 @@ services:
         limits:
           cpus: '4'
           memory: 8G
-    command: python app.py
+    command: python integrated_app.py
