@@ -233,7 +233,7 @@ class Hunyuan3DGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.docker_image = docker_image or os.environ.get(
             "HUNYUAN3D_DOCKER_IMAGE",
-            "your_username/hunyuan3d:latest",
+            "belbaseankit17/hunyuan_custom_fixed:v4",
         )
         logger.info(f"Hunyuan3DGenerator initialized (output: {self.output_dir}, docker_image: {self.docker_image})")
     
