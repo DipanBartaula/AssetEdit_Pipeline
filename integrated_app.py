@@ -413,13 +413,13 @@ with gr.Blocks(
             
             ### 📌 Requirements
             
-            - **LIGHTNING_API_KEY**: Required for Hunyuan 3D generation
+            - **HUNYUAN3D_DOCKER_IMAGE** (optional): Docker image for Hunyuan 3D
               ```
               # Windows
-              set LIGHTNING_API_KEY=your_key_here
+              set HUNYUAN3D_DOCKER_IMAGE=your_username/hunyuan3d:latest
               
               # Linux/Mac
-              export LIGHTNING_API_KEY=your_key_here
+              export HUNYUAN3D_DOCKER_IMAGE=your_username/hunyuan3d:latest
               ```
             
             - **GPU**: Recommended for faster image editing (16GB+ VRAM)
