@@ -287,12 +287,15 @@ class Hunyuan3DGenerator:
                 data_dir=str(self.output_dir),
             )
             logger.info(f"Starting Docker-based Hunyuan3D generation using image: {input_image_path}")
-            output_file = runner.run(input_image_path, verbose=True)
+            output_file = runner.run(input_image_path, mode="textured", verbose=True, fallback=True)
             
-            # The runner writes output_shape.glb into data_dir; rename to match output_name
+            # The runner writes output_textured.glb (or output_shape.glb if fallback); rename to match output_name
             output_path = self.output_dir / f"{output_name}.{output_format}"
             try:
-                generated_path = self.output_dir / "output_shape.glb"
+                # Try textured output first, then fall back to shape output
+                generated_path = self.output_dir / "output_textured.glb"
+                if not generated_path.exists():
+                    generated_path = self.output_dir / "output_shape.glb"
                 if generated_path.exists():
                     generated_path.rename(output_path)
                 else:

@@ -2,6 +2,7 @@
 """
 Hunyuan3D-2.1 Docker Pipeline Runner
 Generates 3D mesh (.glb) from input image using dockerized Hunyuan3D-2.1
+Supports both shape-only and full textured pipeline
 """
 
 import os
@@ -116,9 +117,9 @@ class Hunyuan3DRunner:
             print("⚠ Warning: No NVIDIA GPU detected. Pipeline may fail or run very slowly.")
             return False
     
-    def generate_shape(self, verbose=True):
+    def generate_shape_only(self, verbose=True):
         """
-        Run the Docker container to generate 3D shape
+        Run the Docker container to generate 3D shape only (no texture)
         
         Args:
             verbose: Print detailed output
@@ -158,7 +159,7 @@ print('✓ Shape generation complete!')
         ]
         
         print(f"\n{'='*60}")
-        print("Starting Hunyuan3D shape generation...")
+        print("Starting Hunyuan3D shape generation (no texture)...")
         print(f"{'='*60}\n")
         
         try:
@@ -188,21 +189,128 @@ print('✓ Shape generation complete!')
                 print(e.stderr)
             raise
     
-    def run(self, input_image_path, verbose=True):
+    def generate_full_textured(self, verbose=True, max_views=6, resolution=512):
         """
-        Complete pipeline: setup, copy image, generate shape
+        Run the Docker container to generate full textured 3D model
+        
+        Args:
+            verbose: Print detailed output
+            max_views: Number of views for texture generation (default: 6)
+            resolution: Texture resolution (default: 512)
+            
+        Returns:
+            Path to output textured .glb file
+        """
+        output_file = self.data_dir / "output_textured.glb"
+        temp_mesh = self.data_dir / "temp_mesh.obj"
+        
+        # Python script to run inside container
+        # Note: paint_pipeline returns a file path string, not a mesh object
+        python_script = f"""
+import sys
+import shutil
+sys.path.insert(0, './hy3dshape')
+sys.path.insert(0, './hy3dpaint')
+from hy3dshape.pipelines import Hunyuan3DDiTFlowMatchingPipeline
+from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
+
+print('[1/2] Generating shape...')
+shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2.1')
+mesh_untextured = shape_pipeline(image='/data/input.png')[0]
+mesh_untextured.export('/data/temp_mesh.obj')
+
+print('[2/2] Generating texture (this takes a while)...')
+paint_config = Hunyuan3DPaintConfig(max_num_view={max_views}, resolution={resolution})
+paint_pipeline = Hunyuan3DPaintPipeline(paint_config)
+output_path = paint_pipeline('/data/temp_mesh.obj', image_path='/data/input.png')
+
+print(f'Texture generation output: {{output_path}}')
+
+# The pipeline outputs to a default location, copy it to our desired location
+if isinstance(output_path, str):
+    print(f'Copying from {{output_path}} to /data/output_textured.glb')
+    shutil.copy2(output_path, '/data/output_textured.glb')
+else:
+    print('Exporting textured mesh...')
+    output_path.export('/data/output_textured.glb')
+
+print('✓ Full textured model generation complete!')
+"""
+        
+        # Docker run command
+        docker_cmd = [
+            "docker", "run",
+            "--gpus", "all",
+            "--rm",  # Remove container after execution
+            "-v", f"{self.data_dir.absolute()}:/data",
+            "-w", "/workspace/Hunyuan3D-2.1",
+            self.docker_image,
+            "python3", "-c", python_script
+        ]
+        
+        print(f"\n{'='*60}")
+        print("Starting Hunyuan3D FULL pipeline (shape + texture)...")
+        print(f"Config: {max_views} views, {resolution}px resolution")
+        print("⚠ This will take significantly longer than shape-only!")
+        print(f"{'='*60}\n")
+        
+        try:
+            # Run docker command
+            result = subprocess.run(
+                docker_cmd,
+                capture_output=not verbose,
+                text=True,
+                check=True
+            )
+            
+            if verbose and result.stdout:
+                print(result.stdout)
+            
+            # Check if output file was created
+            if output_file.exists():
+                print(f"\n{'='*60}")
+                print(f"✓ SUCCESS! Textured model saved to: {output_file}")
+                if temp_mesh.exists():
+                    print(f"ℹ Intermediate mesh saved to: {temp_mesh}")
+                
+                # Check for additional texture files
+                texture_files = list(self.data_dir.glob("textured_mesh*"))
+                if texture_files:
+                    print(f"ℹ Additional texture files generated:")
+                    for tf in texture_files:
+                        print(f"  - {tf.name}")
+                
+                print(f"{'='*60}\n")
+                return output_file
+            else:
+                raise RuntimeError("Output file was not created")
+                
+        except subprocess.CalledProcessError as e:
+            print(f"\n✗ Error running Docker container:")
+            if e.stderr:
+                print(e.stderr)
+            raise
+    
+    def run(self, input_image_path, mode="shape", verbose=True, max_views=6, resolution=512, fallback=True):
+        """
+        Complete pipeline: setup, copy image, generate mesh
         
         Args:
             input_image_path: Path to input image
+            mode: 'shape' for shape only, 'textured' for full pipeline
             verbose: Print detailed output
+            max_views: Number of views for texture (only for textured mode)
+            resolution: Texture resolution (only for textured mode)
+            fallback: If True, fall back to shape-only if textured fails
             
         Returns:
             Path to output .glb file
         """
         print("\n🚀 Hunyuan3D-2.1 Pipeline Starting...\n")
+        print(f"Mode: {'SHAPE ONLY' if mode == 'shape' else 'FULL TEXTURED'}")
         
         # Pre-flight checks
-        print("Step 1: Checking Docker...")
+        print("\nStep 1: Checking Docker...")
         if not self.check_docker_available():
             sys.exit(1)
         
@@ -219,8 +327,28 @@ print('✓ Shape generation complete!')
         print("\nStep 5: Copying input image...")
         self.copy_input_image(input_image_path)
         
-        print("\nStep 6: Generating 3D shape...")
-        output_file = self.generate_shape(verbose=verbose)
+        print(f"\nStep 6: Generating 3D {'shape' if mode == 'shape' else 'textured model'}...")
+        
+        if mode == "shape":
+            output_file = self.generate_shape_only(verbose=verbose)
+        elif mode == "textured":
+            try:
+                output_file = self.generate_full_textured(
+                    verbose=verbose,
+                    max_views=max_views,
+                    resolution=resolution
+                )
+            except Exception as e:
+                if fallback:
+                    print(f"\n⚠️  Textured pipeline failed: {str(e)[:100]}")
+                    print("🔄 Falling back to shape-only generation...")
+                    output_file = self.generate_shape_only(verbose=verbose)
+                    print("\n⚠️  Note: Texture generation failed. Your Docker image may need fixing.")
+                    print("   Fix: Rebuild with updated torchvision (pip install --upgrade torchvision)")
+                else:
+                    raise
+        else:
+            raise ValueError(f"Invalid mode: {mode}. Use 'shape' or 'textured'")
         
         return output_file
 
@@ -231,17 +359,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Simple usage (uses default Docker image name)
-  python hunyuan3d_runner.py image.png
-  
-  # Specify your Docker Hub image
+  # Generate shape only (fast)
   python hunyuan3d_runner.py image.png -d myusername/hunyuan3d:latest
   
-  # Custom output directory
-  python hunyuan3d_runner.py image.png -o ./outputs
+  # Generate full textured model (slow but better quality)
+  python hunyuan3d_runner.py image.png -d myusername/hunyuan3d:latest --textured
   
-  # Quiet mode
-  python hunyuan3d_runner.py image.png -q
+  # Textured with custom settings
+  python hunyuan3d_runner.py image.png -d user/hunyuan3d:latest --textured --views 8 --resolution 1024
+  
+  # Custom output directory
+  python hunyuan3d_runner.py image.png -d user/hunyuan3d:latest -o ./outputs
+  
+  # Test mode (check everything without generating)
+  python hunyuan3d_runner.py image.png -d user/hunyuan3d:latest --test
         """
     )
     parser.add_argument(
@@ -260,6 +391,28 @@ Examples:
         type=str,
         default="~/hunyuan_data",
         help="Output directory for generated files (default: ~/hunyuan_data)"
+    )
+    parser.add_argument(
+        "--textured",
+        action="store_true",
+        help="Generate full textured model (slower but higher quality)"
+    )
+    parser.add_argument(
+        "--views",
+        type=int,
+        default=6,
+        help="Number of views for texture generation (default: 6, only for --textured)"
+    )
+    parser.add_argument(
+        "--resolution",
+        type=int,
+        default=512,
+        help="Texture resolution (default: 512, only for --textured)"
+    )
+    parser.add_argument(
+        "--no-fallback",
+        action="store_true",
+        help="Don't fall back to shape-only if textured mode fails"
     )
     parser.add_argument(
         "-q", "--quiet",
@@ -310,14 +463,24 @@ Examples:
         print("="*60)
         return
     
+    # Determine mode
+    mode = "textured" if args.textured else "shape"
+    
     # Normal mode - run full pipeline
     try:
         output_file = runner.run(
             input_image_path=args.input_image,
-            verbose=not args.quiet
+            mode=mode,
+            verbose=not args.quiet,
+            max_views=args.views,
+            resolution=args.resolution,
+            fallback=not args.no_fallback
         )
         print(f"\n✅ Pipeline completed successfully!")
         print(f"📦 Output: {output_file}")
+        
+        if mode == "shape":
+            print("\nℹ️  Tip: Add --textured flag for full textured model (takes longer)")
         
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
